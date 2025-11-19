@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1.0" />
+<title>よくある進行クイズ — 改良版</title>
+
+<style>
+@font-face{
+  font-family: "Nikumaru";
+  src: local("Nikumaru"), url("nikumaru.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* カラーパレット */
+:root{
+  --bg: #f6fbf6;
+  --mint: #9bbd9e;
+  --mint-dark: #7ea283;
+  --muted: #d6d8d6;
+  --text: #2f4f3f;
+  --white: #ffffff;
+  --box-shadow: rgba(0,0,0,0.08);
+}
+
+/* 全体 */
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0;
+  padding:10px 14px 60px;
+  background:var(--bg);
+  color:var(--text);
+  font-family: "Nikumaru", "Hiragino Kaku Gothic ProN", "Noto Sans JP", sans-serif;
+  -webkit-font-smoothing:antialiased;
+  -moz-osx-font-smoothing:grayscale;
+}
+
+/* タイトル＋モード選択エリア（上部） */
+.title-area{
+  text-align:center;
+  margin:6px 0 12px;
+  padding:12px;
+  border-radius:12px;
+}
+.title-area .mode-row{
+  display:flex;
+  gap:8px;
+  justify-content:center;
+  align-items:center;
+  flex-wrap:wrap;
+}
+.select, .action-btn{
+  padding:9px 12px;
+  font-size:15px;
+  border-radius:10px;
+  border:none;
+  background:var(--white);
+  box-shadow:0 2px 6px var(--box-shadow);
+}
+.action-btn{
+  background:var(--mint);
+  color:var(--white);
+  font-weight:700;
+}
+
+/* 進行名と（数字進行）は別表示。数字は結果時に表示 */
+.progress-title{
+  margin-top:12px;
+  font-size:28px;
+  color:var(--mint-dark);
+  font-weight:800;
+}
+.progress-num{
+  margin-top:6px;
+  color:var(--mint-dark);
+  font-size:16px;
+  opacity:0.0; /* 非表示（結果時に見せる） */
+  transition: opacity 0.18s;
+}
+
+/* メイン領域：ボックス＋選択肢ラップ */
+.main-wrap{
+  position:relative;
+  margin-top:10px;
+}
+
+/* ボックス群（問題表示） */
+#boxes{
+  display:flex;
+  gap:10px;
+  justify-content:center;
+  flex-wrap:wrap;
+  margin: 8px 0 12px;
+}
+.box{
+  width:72px;
+  height:44px;
+  background:var(--muted);
+  border-radius:12px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-weight:700;
+  color:#666;
+  position:relative;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.04);
+  cursor:pointer;
+  user-select:none;
+}
+.box.current{ background:#dbe6db; color:var(--text); }
+.box.correct{ background:var(--mint-dark); color:var(--white); box-shadow:none; }
+.box.wrong{ background:#f7c6c6; color:#7a2b2b; box-shadow:none; }
+.correct-answer{
+  position:absolute;
+  top:-18px;
+  left:50%;
+  transform:translateX(-50%);
+  font-size:12px;
+  color:var(--text);
+}
+
+/* 選択肢群 */
+#choices{
+  display:grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap:12px;
+  justify-items:center;
+  margin: 12px auto 28px;
+  max-width:420px;
+}
+.choice{
+  width:120px;
+  padding:12px 8px;
+  border-radius:12px;
+  background:var(--mint);
+  color:var(--white);
+  border:none;
+  font-weight:700;
+  box-shadow:0 6px 14px rgba(0,0,0,0.06);
+  cursor:pointer;
+}
+
+/* ×（取り消し）ボタン：ボックスと選択肢の間の右端 */
+.undo-x{
+  position:absolute;
+  right:6px;
+  top: 25%;               /* ← ここを42%から25%に上げた！ */
+  transform: translateY(-50%);
+  width:46px;             /* ← 小さくした */
+  height:46px;            /* ← 小さくした */
+  border-radius:12px;
+  background:var(--mint-dark);
+  color:var(--white);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-weight:900;
+  font-size:20px;
+  box-shadow:0 6px 14px rgba(0,0,0,0.12);
+  cursor:pointer;
+  border:none;
+  z-index:10;             /* ← 被り防止 */
+}
+
+/* スマホ用さらに微調整 */
+@media (max-width:420px){
+  .undo-x{
+    top: 10%;             /* スマホはさらに上へ */
+    right:4px;
+    width:42px;
+    height:42px;
+    font-size:18px;
+  }
+}
+
+/* Nextボタン（下部右寄せ）*/
+.bottom-wrap{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  margin-top:10px;
+  padding:0 6px;
+}
+.next-btn{
+  background:var(--mint-dark);
+  color:var(--white);
+  padding:10px 18px;
+  border-radius:10px 0 0 10px;
+  font-weight:800;
+  box-shadow:0 6px 14px rgba(0,0,0,0.08);
+  display:none; /* 結果が出たら表示 */
+  border:none;
+}
+
+/* 小さいスコア表示（任意） */
+#score{ font-weight:700; color:var(--text); margin-left:8px; }
+
+/* レスポンシブ */
+@media (max-width:420px){
+  .choice{ width:100px; font-size:15px; }
+  .box{ width:64px; height:42px; }
+  .progress-title{ font-size:24px; }
+}
+</style>
+</head>
+<body>
+
+<!-- タイトル + モード選択（"コード当てゲーム" 文言は削除） -->
+<div class="title-area">
+  <div class="mode-row">
+    <select id="mode" class="select">
+      <option value="1">1個</option>
+      <option value="2">2個</option>
+      <option value="3">3個</option>
+      <option value="all">よくある進行</option>
+    </select>
+    <button id="start" class="action-btn">スタート</button>
+  </div>
+
+  <div class="progress-title" id="progress-name">よくある進行</div>
+  <div class="progress-num" id="progress-num">(0000進行)</div>
+</div>
+
+<!-- メイン -->
+<div class="main-wrap">
+  <div id="boxes" class="box-container"></div>
+
+  <!-- ×取り消しボタン（右端） -->
+  <button id="undo-x" class="undo-x" title="取り消す">✕</button>
+
+  <!-- 選択肢 -->
+  <div id="choices"></div>
+</div>
+
+<!-- 下部：Next（結果後に表示）とスコア -->
+<div class="bottom-wrap">
+  <div id="score">連続正解: 0</div>
+  <button id="next" class="next-btn">Next</button>
+</div>
+
+<!-- スクリプト（ロジック本体） -->
+<script>
+/* ---- 音・進行ロジック (前の仕様を踏襲) ---- */
+const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+let score = 0;
+let sequence = [];
+let currentIndex = 0;
+let currentProgressName = "";
+
+// コード辞書
+const chords = {
+  'Dm': ['D4','F4','A4'],
+  'A':  ['A3','C#4','E4'],
+  'C':  ['C4','E4','G4'],
+  'G':  ['G3','B3','D4'],
+  'F':  ['F3','A3','C4'],
+  'Em': ['E3','G3','B3'],
+  'Am': ['A3','C4','E4'],
+  'Bdim':['B3','D4','F4']
+};
+const chordNames = Object.keys(chords);
+const chordToNum = {'C':1,'Dm':2,'Em':3,'F':4,'G':5,'Am':6,'Bdim':7};
+
+// まとめ進行（J-POP20種類含む）
+const progressions = {
+  '丸の内進行':['C','Am','Dm','G'],
+  '50年代進行':['C','Am','F','G'],
+  'パッヘルベル進行':['C','G','Am','Em','F','C','F','G'],
+  'J-POP1':['C','G','Am','F'],
+  'J-POP2':['C','Am','F','G'],
+  'J-POP3':['C','F','G'],
+  'J-POP4':['C','Am','Dm','G'],
+  'J-POP5':['C','Em','F','G'],
+  'J-POP6':['C','G','F','G'],
+  'J-POP7':['C','Am','F','Em'],
+  'J-POP8':['C','F','Am','G'],
+  'J-POP9':['C','G','Dm','F'],
+  'J-POP10':['C','Am','F','C'],
+  'J-POP11':['C','Em','Am','G'],
+  'J-POP12':['C','F','Dm','G'],
+  'J-POP13':['C','G','Am','Em'],
+  'J-POP14':['C','Am','G','F'],
+  'J-POP15':['C','F','C','G'],
+  'J-POP16':['C','G','F','Em'],
+  'J-POP17':['C','Am','F','Dm'],
+  'J-POP18':['C','F','G','C'],
+  'J-POP19':['C','G','Am','C'],
+  'J-POP20':['C','Am','F','G']
+};
+
+// サウンド再生（少し余韻長め）
+function playNotes(notes,duration=1.4){
+  const now = audioCtx.currentTime;
+  notes.forEach(n=>{
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type='sine';
+    osc.frequency.value = noteToFreq(n);
+    gain.gain.setValueAtTime(0.001, now);
+    gain.gain.linearRampToValueAtTime(0.6, now+0.03);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now+duration);
+    osc.connect(gain).connect(audioCtx.destination);
+    osc.start(now);
+    osc.stop(now+duration+0.05);
+  });
+}
+function noteToFreq(note){
+  const m = note.match(/^([A-G])(#|b)?(\d)$/);
+  if(!m) return 440;
+  const [_,pc,acc,o]=m;
+  let semis={'C':0,'D':2,'E':4,'F':5,'G':7,'A':9,'B':11}[pc];
+  if(acc=='#') semis+=1;
+  if(acc=='b') semis-=1;
+  const octave=parseInt(o);
+  const midi=(octave+1)*12+semis;
+  return 440*Math.pow(2,(midi-69)/12);
+}
+
+/* UI要素 */
+const boxesEl = document.getElementById('boxes');
+const choicesEl = document.getElementById('choices');
+const startBtn = document.getElementById('start');
+const undoX = document.getElementById('undo-x');
+const nextBtn = document.getElementById('next');
+const modeSel = document.getElementById('mode');
+const progressNameEl = document.getElementById('progress-name');
+const progressNumEl = document.getElementById('progress-num');
+const scoreEl = document.getElementById('score');
+
+startBtn.addEventListener('click', startQuiz);
+undoX.addEventListener('click', undoSelection);
+nextBtn.addEventListener('click', nextQuestion);
+
+/* 開始 */
+function startQuiz(){
+  if(audioCtx.state==='suspended') audioCtx.resume();
+  const mode = modeSel.value;
+  let len=1;
+  currentProgressName = "";
+  // リセットUI
+  progressNumEl.style.opacity = 0.0;
+  progressNumEl.innerText = '';
+  nextBtn.style.display = 'none';
+
+  if(mode==='1' || mode==='2' || mode==='3'){
+    len = parseInt(mode);
+    sequence = [];
+    for(let i=0;i<len;i++){
+      sequence.push(chordNames[Math.floor(Math.random()*chordNames.length)]);
+    }
+    currentProgressName = "ランダム進行";
+  } else {
+    const keys = Object.keys(progressions);
+    currentProgressName = keys[Math.floor(Math.random()*keys.length)];
+    sequence = progressions[currentProgressName].slice();
+    len = sequence.length;
+  }
+
+  currentIndex = 0;
+  boxesEl.innerHTML='';
+  for(let i=0;i<len;i++){
+    const b = document.createElement('div');
+    b.className='box';
+    b.addEventListener('click',()=>playNotes(chords[sequence[i]]));
+    boxesEl.appendChild(b);
+  }
+
+  renderChoices();
+  progressNameEl.innerText = currentProgressName;
+  // progressNumElはresult時に表示
+  playSequence(0);
+}
+
+/* 進行を順番に鳴らす */
+function playSequence(idx){
+  if(idx>=sequence.length) return;
+  playNotes(chords[sequence[idx]]);
+  setTimeout(()=>playSequence(idx+1), 1700);
+}
+
+/* 選択肢生成 */
+function renderChoices(){
+  choicesEl.innerHTML='';
+  chordNames.forEach(name=>{
+    const btn = document.createElement('button');
+    btn.className='choice';
+    btn.innerText=name;
+    btn.onclick=()=>selectChord(name);
+    choicesEl.appendChild(btn);
+  });
+}
+
+/* 選んだとき */
+function selectChord(name){
+  const boxes = document.querySelectorAll('.box');
+  if(currentIndex>=sequence.length) return;
+  const box = boxes[currentIndex];
+  box.innerText=name;
+  boxes.forEach(b=>b.classList.remove('current'));
+  box.classList.add('current');
+  currentIndex++;
+  if(currentIndex>=sequence.length){
+    checkResult();
+  }
+}
+
+/* ×取り消し（Undo） */
+function undoSelection(){
+  if(currentIndex<=0) return;
+  currentIndex--;
+  const boxes = document.querySelectorAll('.box');
+  boxes[currentIndex].innerText='';
+  boxes.forEach(b=>b.classList.remove('current'));
+  if(currentIndex < boxes.length) boxes[currentIndex].classList.add('current');
+}
+
+/* 結果判定・表示（正解/不正解 + 同時に数字進行を表示）*/
+function checkResult(){
+  const boxes = document.querySelectorAll('.box');
+  let allCorrect = true;
+  boxes.forEach((b,i)=>{
+    b.classList.remove('current');
+    if(b.innerText===sequence[i]){
+      b.classList.add('correct');
+    } else{
+      allCorrect=false;
+      b.classList.add('wrong');
+      const correctDiv = document.createElement('div');
+      correctDiv.className='correct-answer';
+      correctDiv.innerText = sequence[i];
+      b.appendChild(correctDiv);
+    }
+  });
+
+  // 数字進行（ここで表示）
+  const numProgress = sequence.map(c=>chordToNum[c]||0).join('');
+  progressNumEl.innerText = `（${numProgress}進行）`;
+  progressNumEl.style.opacity = 1.0;
+
+  // 連続正解スコア更新
+  score = allCorrect? score+1 : 0;
+  scoreEl.innerText = `連続正解: ${score}`;
+
+  // Nextボタン表示（ユーザーが押すまで次へ進まない）
+  nextBtn.style.display = 'inline-block';
+}
+
+/* Next押したら次問題 */
+function nextQuestion(){
+  startQuiz();
+}
+
+/* 最初に1回だけ実行しておく（任意） */
+startQuiz();
+</script>
+</body>
+</html>
